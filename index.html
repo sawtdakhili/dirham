@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bank Statement Expense Categorizer</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useCallback } = React;
+        const { Upload, FileText, Edit3, Check, X, TrendingUp, PieChart } = lucide;
+
+        const ExpenseCategorizer = () => {
+          const [transactions, setTransactions] = useState([]);
+          const [isProcessing, setIsProcessing] = useState(false);
+          const [editingId, setEditingId] = useState(null);
+          const [selectedCategory, setSelectedCategory] = useState('');
+          const [activeTab, setActiveTab] = useState('upload');
+
+          // Default categories with keywords for auto-categorization
+          const categories = {
+            'restaurants': { 
+              name: 'Restaurants & Food', 
+              icon: '🍽️', 
+              color: 'bg-orange-100 text-orange-800 border-orange-200',
+              keywords: ['restaurant', 'chilis', 'giovanni', 'restopro', 'cafe', 'resto', 'pizza', 'mcdo', 'kfc', 'o bench']
+            },
+            'shopping': {
+              name: 'Shopping & Retail',
+              icon: '🛒',
+              color: 'bg-purple-100 text-purple-800 border-purple-200',
+              keywords: ['decathlon', 'okaidi', 'waikiki', 'colins', 'zara', 'marjane', 'carrefour', 'mall']
+            },
+            'healthcare': {
+              name: 'Healthcare',
+              icon: '🏥',
+              color: 'bg-green-100 text-green-800 border-green-200',
+              keywords: ['pharmacie', 'radiologie', 'clinique', 'hopital', 'medecin', 'dentiste']
+            },
+            'fuel': {
+              name: 'Transportation & Fuel',
+              icon: '⛽',
+              color: 'bg-blue-100 text-blue-800 border-blue-200',
+              keywords: ['shell', 'petrom', 'total', 'africain', 'taxi', 'autoroute', 'peage']
+            },
+            'utilities': {
+              name: 'Utilities & Bills',
+              icon: '⚡',
+              color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+              keywords: ['lydec', 'redal', 'iam', 'orange', 'inwi', 'internet', 'electricite', 'eau']
+            },
+            'subscriptions': {
+              name: 'Subscriptions',
+              icon: '📱',
+              color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+              keywords: ['netflix', 'spotify', 'subscription', 'rebble', 'paypal', 'app store', 'google play']
+            },
+            'transfers': {
+              name: 'Transfers & Payments',
+              icon: '💸',
+              color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+              keywords: ['vir.emis', 'vir emis', 'vir inst emis', 'virement emis', 'vers']
+            },
+            'income': {
+              name: 'Income',
+              icon: '💰',
+              color: 'bg-green-100 text-green-800 border-green-200',
+              keywords: ['vir.recu', 'virement recu', 'pai-divid', 'salaire', 'young et rubicam', 'wafa']
+            },
+            'banking': {
+              name: 'Banking & Fees',
+              icon: '🏦',
+              color: 'bg-gray-100 text-gray-800 border-gray-200',
+              keywords: ['frais', 'commission', 'comm', 'operation au debit', 'seccart', 'c.dom']
+            },
+            'cash': {
+              name: 'Cash Withdrawals',
+              icon: '💸',
+              color: 'bg-red-100 text-red-800 border-red-200',
+              keywords: ['gab', 'awbgab', 'retrait', 'especes']
+            },
+            'insurance': {
+              name: 'Insurance & Savings',
+              icon: '🛡️',
+              color: 'bg-teal-100 text-teal-800 border-teal-200',
+              keywords: ['assurance', 'age d\'or', 'wafa', 'prelevement', 'epargne']
+            },
+            'uncategorized': {
+              name: 'Needs Review',
+              icon: '❓',
+              color: 'bg-amber-100 text-amber-800 border-amber-200',
+              keywords: []
+            }
+          };
+
+          // Auto-categorize transaction based on description
+          const categorizeTransaction = (description) => {
+            const desc = description.toLowerCase();
+
+            for (const [categoryId, category] of Object.entries(categories)) {
+              if (categoryId === 'uncategorized') continue;
+
+              for (const keyword of category.keywords) {
+                if (desc.includes(keyword.toLowerCase())) {
+                  return { category: categoryId, confidence: 'high' };
+                }
+              }
+            }
+
+            return { category: 'uncategorized', confidence: 'low' };
+          };
+
+          // Parse sample transaction data (simulating PDF parsing)
+          const parseTransactions = (file) => {
+            // This simulates the PDF parsing - in real implementation, you'd use a PDF parsing library
+            // All transactions from your June 2024 bank statement
+            const sampleTransactions = [
+              // Income
+              {
+                id: 1,
+                date: '2024-06-26',
+                description: 'VIREMENT RECU DE YOUNG ET RUBICAM',
+                amount: 34620.00,
+                merchant: 'YOUNG ET RUBICAM'
+              },
+              {
+                id: 2,
+                date: '2024-06-24',
+                description: 'VIR.RECU DE WAFA SSURANCE',
+                amount: 284.67,
+                merchant: 'WAFA ASSURANCE'
+              },
+              {
+                id: 3,
+                date: '2024-06-24',
+                description: 'PAI-DIVID CFG BANK 72 A 3.3 MAD',
+                amount: 196.73,
+                merchant: 'CFG BANK'
+              },
+              // Transfers
+              {
+                id: 4,
+                date: '2024-06-03',
+                description: 'VIR.EMIS WEB VERS EL AKRAMINE',
+                amount: -5000.00,
+                merchant: 'EL AKRAMINE'
+              },
+              {
+                id: 5,
+                date: '2024-06-03',
+                description: 'VIR.EMIS WEB VERS RAJRAJI',
+                amount: -1500.00,
+                merchant: 'RAJRAJI'
+              },
+              {
+                id: 6,
+                date: '2024-06-03',
+                description: 'VIR.EMIS WEB VERS BENZARI new',
+                amount: -5940.00,
+                merchant: 'BENZARI'
+              },
+              {
+                id: 7,
+                date: '2024-06-03',
+                description: 'VIR INST EMIS VERS Lamia EL AKRAMIN',
+                amount: -2000.00,
+                merchant: 'Lamia EL AKRAMIN'
+              },
+              {
+                id: 8,
+                date: '2024-06-21',
+                description: 'VIR INST EMIS VERS Lamia EL AKRAMIN',
+                amount: -2000.00,
+                merchant: 'Lamia EL AKRAMIN'
+              },
+              {
+                id: 9,
+                date: '2024-06-28',
+                description: 'VIR INST EMIS VERS Lamia EL AKRAMIN',
+                amount: -2000.00,
+                merchant: 'Lamia EL AKRAMIN'
+              },
+              {
+                id: 10,
+                date: '2024-06-25',
+                description: 'VIR.EMIS WEB VERS LABSAILI',
+                amount: -6700.00,
+                merchant: 'LABSAILI'
+              },
+              {
+                id: 11,
+                date: '2024-06-28',
+                description: 'VIR.EMIS WEB VERS EL AKRAMINE',
+                amount: -5000.00,
+                merchant: 'EL AKRAMINE'
+              },
+              {
+                id: 12,
+                date: '2024-06-28',
+                description: 'VIR.EMIS WEB VERS BENZARI new',
+                amount: -5940.00,
+                merchant: 'BENZARI'
+              },
+              // Restaurants & Food
+              {
+                id: 13,
+                date: '2024-06-04',
+                description: 'PAIEMENT CB 01/06/24 CHILIS E',
+                amount: -655.00,
+                merchant: 'CHILIS E'
+              },
+              {
+                id: 14,
+                date: '2024-06-04',
+                description: 'PAIEMENT CB 02/06/24 GIOVANNI ICE',
+                amount: -168.00,
+                merchant: 'GIOVANNI ICE'
+              },
+              {
+                id: 15,
+                date: '2024-06-11',
+                description: 'PAIEMENT CB 08/06/24 O BENCH',
+                amount: -420.00,
+                merchant: 'O BENCH'
+              },
+              {
+                id: 16,
+                date: '2024-06-25',
+                description: 'PAIEMENT CB 22/06/24 CHILIS E',
+                amount: -649.00,
+                merchant: 'CHILIS E'
+              },
+              {
+                id: 17,
+                date: '2024-06-25',
+                description: 'PAIEMENT CB 23/06/24 RESTOPRO',
+                amount: -695.00,
+                merchant: 'RESTOPRO'
+              },
+              {
+                id: 18,
+                date: '2024-06-19',
+                description: 'PAIEMENT CB 13/06/24 ANSAMBLE KHMIS',
+                amount: -90.00,
+                merchant: 'ANSAMBLE KHMIS'
+              },
+              {
+                id: 19,
+                date: '2024-06-19',
+                description: 'PAIEMENT CB 13/06/24 AFRQ D GRENADI',
+                amount: -300.00,
+                merchant: 'AFRQ D GRENADI'
+              },
+              // Shopping & Retail
+              {
+                id: 20,
+                date: '2024-06-04',
+                description: 'PAIEMENT CB 01/06/24 DECATHLON CORN',
+                amount: -337.00,
+                merchant: 'DECATHLON CORN'
+              },
+              {
+                id: 21,
+                date: '2024-06-11',
+                description: 'PAIEMENT CB 08/06/24 OKAIDI M MALL',
+                amount: -237.00,
+                merchant: 'OKAIDI M MALL'
+              },
+              {
+                id: 22,
+                date: '2024-06-25',
+                description: 'PAIEMENT CB 23/06/24 LC WAIKIKI IBN',
+                amount: -298.00,
+                merchant: 'LC WAIKIKI IBN'
+              },
+              {
+                id: 23,
+                date: '2024-06-26',
+                description: 'PAIEMENT CB 24/06/24 COLINS TCM',
+                amount: -474.00,
+                merchant: 'COLINS TCM'
+              },
+              // Healthcare
+              {
+                id: 24,
+                date: '2024-06-03',
+                description: 'PAIEMENT CB 31/05/24 RADIOLOGIE DER',
+                amount: -400.00,
+                merchant: 'RADIOLOGIE DER'
+              },
+              {
+                id: 25,
+                date: '2024-06-06',
+                description: 'PAIEMENT CB 04/06/24 PHARMACIE ACHR',
+                amount: -343.80,
+                merchant: 'PHARMACIE ACHR'
+              },
+              // Transportation & Fuel
+              {
+                id: 26,
+                date: '2024-06-19',
+                description: 'PAIEMENT CB 13/06/24 PETROM ISTIRAH',
+                amount: -200.00,
+                merchant: 'PETROM ISTIRAH'
+              },
+              {
+                id: 27,
+                date: '2024-06-26',
+                description: 'PAIEMENT CB 23/06/24 SHELL WIDAD',
+                amount: -300.00,
+                merchant: 'SHELL WIDAD'
+              },
+              {
+                id: 28,
+                date: '2024-06-19',
+                description: 'PAIEMENT AUTOROUTE MAR. HB 18/06/2024',
+                amount: -300.00,
+                merchant: 'AUTOROUTE MAROC'
+              },
+              // Subscriptions & Online
+              {
+                id: 29,
+                date: '2024-06-04',
+                description: 'Netflix.com',
+                amount: -98.19,
+                merchant: 'Netflix.com'
+              },
+              {
+                id: 30,
+                date: '2024-06-13',
+                description: 'REBBLE SUBSCRIPTION',
+                amount: -30.78,
+                merchant: 'REBBLE SUBSCRIPTION'
+              },
+              {
+                id: 31,
+                date: '2024-06-13',
+                description: 'PAYPAL *GUO Z4W22',
+                amount: -410.43,
+                merchant: 'PAYPAL'
+              },
+              {
+                id: 32,
+                date: '2024-06-20',
+                description: 'www.aliexpress.com',
+                amount: -8.59,
+                merchant: 'AliExpress'
+              },
+              {
+                id: 33,
+                date: '2024-06-20',
+                description: 'www.aliexpress.com',
+                amount: -41.48,
+                merchant: 'AliExpress'
+              },
+              // Utilities & Bills
+              {
+                id: 34,
+                date: '2024-06-25',
+                description: 'PAIEMENT IAM FACTURE HB 24/06/2024',
+                amount: -500.00,
+                merchant: 'IAM'
+              },
+              {
+                id: 35,
+                date: '2024-06-25',
+                description: 'PAIEMENT LYDEC HB 24/06/2024',
+                amount: -388.60,
+                merchant: 'LYDEC'
+              },
+              {
+                id: 36,
+                date: '2024-06-26',
+                description: 'PRELEVEMENT EN FAV. IAM',
+                amount: -408.00,
+                merchant: 'IAM'
+              },
+              // Insurance & Savings
+              {
+                id: 37,
+                date: '2024-06-03',
+                description: 'PRELEV.AGE OR:AGE D\'OR',
+                amount: -500.00,
+                merchant: 'AGE D\'OR'
+              },
+              {
+                id: 38,
+                date: '2024-06-07',
+                description: 'PRELEVEMENT G057 ECH 06/06/2024',
+                amount: -200.00,
+                merchant: 'G057 ECH'
+              },
+              // Cash Withdrawals
+              {
+                id: 39,
+                date: '2024-06-03',
+                description: 'AWBGAB SD ABDERAHMAN 01/06 10H51',
+                amount: -500.00,
+                merchant: 'ATM AWBGAB'
+              },
+              {
+                id: 40,
+                date: '2024-06-03',
+                description: 'GAB S.G.M.B 01/06/24',
+                amount: -500.00,
+                merchant: 'ATM SGMB'
+              },
+              {
+                id: 41,
+                date: '2024-06-05',
+                description: 'GAB 03/06/24',
+                amount: -1000.00,
+                merchant: 'ATM'
+              },
+              {
+                id: 42,
+                date: '2024-06-06',
+                description: 'GAB 04/06/24',
+                amount: -1500.00,
+                merchant: 'ATM'
+              },
+              {
+                id: 43,
+                date: '2024-06-10',
+                description: 'GAB C.I.H 06/06/24',
+                amount: -500.00,
+                merchant: 'ATM CIH'
+              },
+              {
+                id: 44,
+                date: '2024-06-13',
+                description: 'AWBGAB YB MANSOUR 12/06 17H55',
+                amount: -500.00,
+                merchant: 'ATM AWBGAB'
+              },
+              {
+                id: 45,
+                date: '2024-06-14',
+                description: 'AWBGAB IMOUZZER KAND 13/06 21H14',
+                amount: -2000.00,
+                merchant: 'ATM AWBGAB'
+              },
+              {
+                id: 46,
+                date: '2024-06-14',
+                description: 'AWBGAB SD ABDERAHMAN 13/06 11H30',
+                amount: -1000.00,
+                merchant: 'ATM AWBGAB'
+              },
+              {
+                id: 47,
+                date: '2024-06-14',
+                description: 'GAB 12/06/24',
+                amount: -300.00,
+                merchant: 'ATM'
+              },
+              {
+                id: 48,
+                date: '2024-06-19',
+                description: 'GAB S.G.M.B 13/06/24',
+                amount: -500.00,
+                merchant: 'ATM SGMB'
+              },
+              {
+                id: 49,
+                date: '2024-06-19',
+                description: 'GAB 15/06/24',
+                amount: -2000.00,
+                merchant: 'ATM'
+              },
+              {
+                id: 50,
+                date: '2024-06-19',
+                description: 'GAB 14/06/24',
+                amount: -1000.00,
+                merchant: 'ATM'
+              },
+              {
+                id: 51,
+                date: '2024-06-19',
+                description: 'GAB 14/06/24',
+                amount: -2000.00,
+                merchant: 'ATM'
+              },
+              // Banking Fees
+              {
+                id: 52,
+                date: '2024-06-03',
+                description: '1 FRAIS/RETRAIT ESP GAB CONFRERE',
+                amount: -6.00,
+                merchant: 'BANK FEES'
+              },
+              {
+                id: 53,
+                date: '2024-06-03',
+                description: 'COMM VIR EMIS 199887986',
+                amount: -17.60,
+                merchant: 'BANK FEES'
+              },
+              {
+                id: 54,
+                date: '2024-06-05',
+                description: '1 FRAIS/RETRAIT ESP GAB CONFRERE',
+                amount: -6.00,
+                merchant: 'BANK FEES'
+              },
+              {
+                id: 55,
+                date: '2024-06-06',
+                description: '1 FRAIS/RETRAIT ESP GAB CONFRERE',
+                amount: -6.00,
+                merchant: 'BANK FEES'
+              },
+              {
+                id: 56,
+                date: '2024-06-06',
+                description: 'OPERATION AU DEBIT REF : SECCART',
+                amount: -3.03,
+                merchant: 'BANK FEES'
+              },
+              {
+                id: 57,
+                date: '2024-06-10',
+                description: '1 FRAIS/RETRAIT ESP GAB CONFRERE',
+                amount: -6.00,
+                merchant: 'BANK FEES'
+              },
+              {
+                id: 58,
+                date: '2024-06-13',
+                description: 'OPERATION AU DEBIT REF : C.DOM2',
+                amount: -39.11,
+                merchant: 'BANK FEES'
+              },
+              {
+                id: 59,
+                date: '2024-06-14',
+                description: '1 FRAIS/RETRAIT ESP GAB CONFRERE',
+                amount: -6.00,
+                merchant: 'BANK FEES'
+              },
+              {
+                id: 60,
+                date: '2024-06-19',
+                description: '4 FRAIS/RETRAIT ESP GAB CONFRERE',
+                amount: -24.00,
+                merchant: 'BANK FEES'
+              },
+              {
+                id: 61,
+                date: '2024-06-21',
+                description: 'COMM VIR EMIS 203217785',
+                amount: -17.60,
+                merchant: 'BANK FEES'
+              },
+              {
+                id: 62,
+                date: '2024-06-28',
+                description: 'COMM VIR EMIS 204462537',
+                amount: -17.60,
+                merchant: 'BANK FEES'
+              }
+            ];
+
+            return sampleTransactions.map(transaction => {
+              const categorization = categorizeTransaction(transaction.description);
+              return {
+                ...transaction,
+                category: categorization.category,
+                confidence: categorization.confidence,
+                userEdited: false
+              };
+            });
+          };
+
+          // Handle file upload
+          const handleFileUpload = useCallback((files) => {
+            if (files.length === 0) return;
+
+            setIsProcessing(true);
+            setActiveTab('transactions');
+
+            // Simulate processing time
+            setTimeout(() => {
+              const parsedTransactions = parseTransactions(files[0]);
+              setTransactions(parsedTransactions);
+              setIsProcessing(false);
+            }, 2000);
+          }, []);
+
+          // Handle drag and drop
+          const handleDrop = useCallback((e) => {
+            e.preventDefault();
+            const files = Array.from(e.dataTransfer.files);
+            handleFileUpload(files);
+          }, [handleFileUpload]);
+
+          const handleDragOver = useCallback((e) => {
+            e.preventDefault();
+          }, []);
+
+          // Update transaction category
+          const updateTransactionCategory = (id, newCategory) => {
+            setTransactions(prev =>
+              prev.map(transaction =>
+                transaction.id === id
+                  ? { ...transaction, category: newCategory, userEdited: true, confidence: 'high' }
+                  : transaction
+              )
+            );
+            setEditingId(null);
+          };
+
+          // Calculate statistics
+          const calculateStats = () => {
+            const categoryTotals = {};
+            const totalInflows = transactions.reduce((sum, t) => {
+              if (t.amount > 0) {
+                return sum + t.amount;
+              }
+              return sum;
+            }, 0);
+
+            const totalOutflows = transactions.reduce((sum, t) => {
+              if (t.amount < 0) {
+                const category = t.category;
+                categoryTotals[category] = (categoryTotals[category] || 0) + Math.abs(t.amount);
+                return sum + Math.abs(t.amount);
+              }
+              return sum;
+            }, 0);
+
+            const netFlow = totalInflows - totalOutflows;
+
+            return { categoryTotals, totalInflows, totalOutflows, netFlow };
+          };
+
+          const { categoryTotals, totalInflows, totalOutflows, netFlow } = calculateStats();
+
+          const formatAmount = (amount) => {
+            return new Intl.NumberFormat('fr-MA', {
+              style: 'currency',
+              currency: 'MAD'
+            }).format(Math.abs(amount));
+          };
+
+          return (
+            <div className="min-h-screen bg-gray-50">
+              {/* Header */}
+              <div className="bg-white shadow-sm border-b">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                  <div className="flex justify-between items-center py-6">
+                    <div>
+                      <h1 className="text-3xl font-bold text-gray-900">Expense Categorizer</h1>
+                      <p className="mt-1 text-sm text-gray-500">Upload your bank statement and categorize your expenses</p>
+                    </div>
+                    <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                      <button
+                        onClick={() => setActiveTab('upload')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                          activeTab === 'upload'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        <Upload className="w-4 h-4 inline mr-2" />
+                        Upload
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('transactions')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                          activeTab === 'transactions'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        <FileText className="w-4 h-4 inline mr-2" />
+                        Transactions ({transactions.length})
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('analytics')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                          activeTab === 'analytics'
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'
+                        }`}
+                      >
+                        <PieChart className="w-4 h-4 inline mr-2" />
+                        Analytics
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                {/* Upload Tab */}
+                {activeTab === 'upload' && (
+                  <div className="max-w-2xl mx-auto">
+                    <div
+                      onDrop={handleDrop}
+                      onDragOver={handleDragOver}
+                      className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-gray-400 transition-colors cursor-pointer"
+                    >
+                      <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                      <h3 className="mt-4 text-lg font-medium text-gray-900">Upload your bank statement</h3>
+                      <p className="mt-2 text-sm text-gray-500">
+                        Drag and drop your PDF bank statement here, or click to select
+                      </p>
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        onChange={(e) => handleFileUpload(Array.from(e.target.files))}
+                        className="hidden"
+                        id="file-upload"
+                      />
+                      <label
+                        htmlFor="file-upload"
+                        className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 cursor-pointer"
+                      >
+                        Choose file
+                      </label>
+                    </div>
+
+                    {isProcessing && (
+                      <div className="mt-8 text-center">
+                        <div className="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-white bg-blue-500">
+                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Processing your bank statement...
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Transactions Tab */}
+                {activeTab === 'transactions' && (
+                  <div>
+                    {transactions.length === 0 ? (
+                      <div className="text-center py-12">
+                        <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                        <h3 className="mt-4 text-lg font-medium text-gray-900">No transactions yet</h3>
+                        <p className="mt-2 text-sm text-gray-500">Upload a bank statement to get started</p>
+                      </div>
+                    ) : (
+                      <div className="bg-white shadow rounded-lg overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-200">
+                          <h3 className="text-lg font-medium text-gray-900">
+                            Transactions ({transactions.length})
+                          </h3>
+                          <p className="mt-1 text-sm text-gray-500">
+                            Review and categorize your expenses
+                          </p>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Date
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Description
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Amount
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Category
+                                </th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                  Actions
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                              {transactions.map((transaction) => (
+                                <tr key={transaction.id} className="hover:bg-gray-50">
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                    {new Date(transaction.date).toLocaleDateString('fr-FR')}
+                                  </td>
+                                  <td className="px-6 py-4 text-sm text-gray-900">
+                                    <div>
+                                      <div className="font-medium">{transaction.merchant}</div>
+                                      <div className="text-gray-500 text-xs">{transaction.description}</div>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <span className={transaction.amount < 0 ? 'text-red-600' : 'text-green-600'}>
+                                      {formatAmount(transaction.amount)}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    {editingId === transaction.id ? (
+                                      <select
+                                        value={selectedCategory}
+                                        onChange={(e) => setSelectedCategory(e.target.value)}
+                                        className="text-sm border border-gray-300 rounded-md px-2 py-1"
+                                        autoFocus
+                                      >
+                                        <option value="">Select category</option>
+                                        {Object.entries(categories).map(([id, category]) => (
+                                          <option key={id} value={id}>
+                                            {category.icon} {category.name}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : (
+                                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${categories[transaction.category]?.color || 'bg-gray-100 text-gray-800 border-gray-200'}`}>
+                                        <span className="mr-1">{categories[transaction.category]?.icon}</span>
+                                        {categories[transaction.category]?.name}
+                                        {transaction.confidence === 'low' && (
+                                          <span className="ml-1 text-amber-500">⚠️</span>
+                                        )}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    {editingId === transaction.id ? (
+                                      <div className="flex space-x-2">
+                                        <button
+                                          onClick={() => updateTransactionCategory(transaction.id, selectedCategory)}
+                                          disabled={!selectedCategory}
+                                          className="text-green-600 hover:text-green-900 disabled:text-gray-400"
+                                        >
+                                          <Check className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => setEditingId(null)}
+                                          className="text-red-600 hover:text-red-900"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => {
+                                          setEditingId(transaction.id);
+                                          setSelectedCategory(transaction.category);
+                                        }}
+                                        className="text-blue-600 hover:text-blue-900"
+                                      >
+                                        <Edit3 className="w-4 h-4" />
+                                      </button>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Analytics Tab */}
+                {activeTab === 'analytics' && (
+                  <div>
+                    {transactions.length === 0 ? (
+                      <div className="text-center py-12">
+                        <TrendingUp className="mx-auto h-12 w-12 text-gray-400" />
+                        <h3 className="mt-4 text-lg font-medium text-gray-900">No data to analyze</h3>
+                        <p className="mt-2 text-sm text-gray-500">Upload and categorize transactions to see your spending analysis</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Summary Cards */}
+                        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                          <div className="bg-white p-6 rounded-lg shadow">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0">
+                                <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center">
+                                  <span className="text-green-600 font-bold">↗</span>
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <p className="text-sm font-medium text-gray-500">Money In</p>
+                                <p className="text-2xl font-semibold text-green-600">
+                                  {formatAmount(totalInflows)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-white p-6 rounded-lg shadow">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0">
+                                <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center">
+                                  <span className="text-red-600 font-bold">↘</span>
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <p className="text-sm font-medium text-gray-500">Money Out</p>
+                                <p className="text-2xl font-semibold text-red-600">
+                                  {formatAmount(totalOutflows)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-white p-6 rounded-lg shadow">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0">
+                                <div className={`h-8 w-8 ${netFlow >= 0 ? 'bg-green-100' : 'bg-red-100'} rounded-full flex items-center justify-center`}>
+                                  <span className={`${netFlow >= 0 ? 'text-green-600' : 'text-red-600'} font-bold`}>
+                                    {netFlow >= 0 ? '+' : '-'}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="ml-4">
+                                <p className="text-sm font-medium text-gray-500">Net Flow</p>
+                                <p className={`text-2xl font-semibold ${netFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {netFlow >= 0 ? '+' : ''}{formatAmount(netFlow)}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-white p-6 rounded-lg shadow">
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0">
+                                <FileText className="h-8 w-8 text-blue-600" />
+                              </div>
+                              <div className="ml-4">
+                                <p className="text-sm font-medium text-gray-500">Transactions</p>
+                                <p className="text-2xl font-semibold text-gray-900">{transactions.length}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Category Breakdown and Pie Chart */}
+                        <div className="bg-white p-6 rounded-lg shadow">
+                          <h3 className="text-lg font-medium text-gray-900 mb-6">Money Out by Category</h3>
+
+                          {/* Pie Chart */}
+                          <div className="mb-8 flex justify-center">
+                            <div className="relative w-80 h-80">
+                              <svg viewBox="0 0 200 200" className="w-full h-full transform -rotate-90">
+                                {(() => {
+                                  let cumulativeAngle = 0;
+                                  const radius = 80;
+                                  const centerX = 100;
+                                  const centerY = 100;
+
+                                  // Get colors for each category
+                                  const categoryColors = {
+                                    'transfers': '#6366f1',
+                                    'restaurants': '#f97316',
+                                    'shopping': '#a855f7',
+                                    'healthcare': '#22c55e',
+                                    'fuel': '#3b82f6',
+                                    'utilities': '#eab308',
+                                    'subscriptions': '#6366f1',
+                                    'banking': '#6b7280',
+                                    'cash': '#ef4444',
+                                    'insurance': '#14b8a6',
+                                    'uncategorized': '#f59e0b'
+                                  };
+
+                                  return Object.entries(categoryTotals)
+                                    .sort(([,a], [,b]) => b - a)
+                                    .map(([categoryId, amount], index) => {
+                                      const percentage = amount / totalOutflows;
+                                      const angle = percentage * 360;
+
+                                      // Create SVG path for pie slice
+                                      const startAngle = (cumulativeAngle * Math.PI) / 180;
+                                      const endAngle = ((cumulativeAngle + angle) * Math.PI) / 180;
+
+                                      const x1 = centerX + radius * Math.cos(startAngle);
+                                      const y1 = centerY + radius * Math.sin(startAngle);
+                                      const x2 = centerX + radius * Math.cos(endAngle);
+                                      const y2 = centerY + radius * Math.sin(endAngle);
+
+                                      const largeArcFlag = angle > 180 ? 1 : 0;
+
+                                      const pathData = [
+                                        `M ${centerX} ${centerY}`,
+                                        `L ${x1} ${y1}`,
+                                        `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2}`,
+                                        'Z'
+                                      ].join(' ');
+
+                                      cumulativeAngle += angle;
+
+                                      return (
+                                        <path
+                                          key={categoryId}
+                                          d={pathData}
+                                          fill={categoryColors[categoryId] || '#6b7280'}
+                                          stroke="white"
+                                          strokeWidth="1"
+                                          opacity="0.8"
+                                          className="hover:opacity-100 transition-opacity cursor-pointer"
+                                        />
+                                      );
+                                    });
+                                })()}
+                              </svg>
+
+                              {/* Center label */}
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="text-center">
+                                  <div className="text-sm font-medium text-gray-500">Total Out</div>
+                                  <div className="text-lg font-semibold text-gray-900">
+                                    {formatAmount(totalOutflows)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Category Legend & Breakdown */}
+                          <div className="space-y-4">
+                            {Object.entries(categoryTotals)
+                              .sort(([,a], [,b]) => b - a)
+                              .map(([categoryId, amount]) => {
+                                const category = categories[categoryId];
+                                const percentage = ((amount / totalOutflows) * 100).toFixed(1);
+
+                                const categoryColors = {
+                                  'transfers': 'bg-indigo-500',
+                                  'restaurants': 'bg-orange-500',
+                                  'shopping': 'bg-purple-500',
+                                  'healthcare': 'bg-green-500',
+                                  'fuel': 'bg-blue-500',
+                                  'utilities': 'bg-yellow-500',
+                                  'subscriptions': 'bg-indigo-500',
+                                  'banking': 'bg-gray-500',
+                                  'cash': 'bg-red-500',
+                                  'insurance': 'bg-teal-500',
+                                  'uncategorized': 'bg-amber-500'
+                                };
+
+                                return (
+                                  <div key={categoryId} className="flex items-center justify-between">
+                                    <div className="flex items-center">
+                                      <div className={`w-4 h-4 rounded-full mr-3 ${categoryColors[categoryId] || 'bg-gray-500'}`}></div>
+                                      <span className="text-lg mr-2">{category?.icon}</span>
+                                      <span className="text-sm font-medium text-gray-900">
+                                        {category?.name}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center space-x-3">
+                                      <div className="w-24 bg-gray-200 rounded-full h-2">
+                                        <div
+                                          className="bg-red-500 h-2 rounded-full"
+                                          style={{ width: `${percentage}%` }}
+                                        ></div>
+                                      </div>
+                                      <span className="text-sm font-medium text-gray-900 w-16 text-right">
+                                        {percentage}%
+                                      </span>
+                                      <span className="text-sm text-gray-500 w-20 text-right">
+                                        {formatAmount(amount)}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
+                        </div>
+
+                        {/* Money In/Out Summary */}
+                        <div className="bg-white p-6 rounded-lg shadow">
+                          <h3 className="text-lg font-medium text-gray-900 mb-4">Money Flow Summary</h3>
+                          <div className="space-y-4">
+                            {/* Money In */}
+                            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                              <div className="flex items-center">
+                                <div className="h-8 w-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                                  <span className="text-green-600 font-bold">↗</span>
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">Money In</div>
+                                  <div className="text-xs text-gray-500">
+                                    {transactions.filter(t => t.amount > 0).length} transactions
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-lg font-semibold text-green-600">
+                                +{formatAmount(totalInflows)}
+                              </span>
+                            </div>
+
+                            {/* Money Out */}
+                            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+                              <div className="flex items-center">
+                                <div className="h-8 w-8 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                                  <span className="text-red-600 font-bold">↘</span>
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">Money Out</div>
+                                  <div className="text-xs text-gray-500">
+                                    {transactions.filter(t => t.amount < 0).length} transactions
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-lg font-semibold text-red-600">
+                                -{formatAmount(totalOutflows)}
+                              </span>
+                            </div>
+
+                            {/* Net Flow */}
+                            <div className="flex items-center justify-between pt-3">
+                              <div className="flex items-center">
+                                <div className={`h-8 w-8 ${netFlow >= 0 ? 'bg-green-100' : 'bg-red-100'} rounded-full flex items-center justify-center mr-3`}>
+                                  <span className={`${netFlow >= 0 ? 'text-green-600' : 'text-red-600'} font-bold`}>
+                                    =
+                                  </span>
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium text-gray-900">Net Flow</div>
+                                  <div className="text-xs text-gray-500">
+                                    {netFlow >= 0 ? 'Positive' : 'Negative'} for this period
+                                  </div>
+                                </div>
+                              </div>
+                              <span className={`text-lg font-semibold ${netFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                {netFlow >= 0 ? '+' : ''}{formatAmount(netFlow)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        };
+
+        ReactDOM.render(<ExpenseCategorizer />, document.getElementById('root'));
+    </script>
+</body>
+</html>
