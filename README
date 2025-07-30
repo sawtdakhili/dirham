@@ -1,1 +1,13 @@
+# Bank Statement Expense Categorizer
 
+A web application that automatically categorizes bank transactions and provides spending analytics.
+
+## Features
+- Automatic expense categorization
+- Manual category editing
+- Visual analytics with pie charts
+- Money flow analysis
+- Mobile responsive design
+
+## Demo
+Visit the live app: [Your GitHub Pages URL]
